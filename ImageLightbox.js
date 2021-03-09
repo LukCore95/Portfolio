@@ -193,10 +193,10 @@
         if (!c.length) return true;
         e.preventDefault();
         if (e.keyCode == 27) w();
-        if (e.keyCode == 37 || e.keyCode == 39) {
-          l = i.eq(i.index(l) - (e.keyCode == 37 ? 1 : -1));
-          if (!l.length) l = i.eq(e.keyCode == 37 ? i.length : 0);
-          y(e.keyCode == 37 ? "left" : "right")
+        if (e.keyCode == 37 || e.keyCode == 38 || e.keyCode == 39 || e.keyCode == 40) {
+          l = i.eq(i.index(l) - (e.keyCode == 37 || e.keyCode == 38 ? 1 : -1));
+          if (!l.length) l = i.eq(e.keyCode == 37 || e.keyCode == 38 ? i.length : 0);
+          y(e.keyCode == 37 || e.keyCode == 38 ? "left" : "right")
         }
       })
     }
