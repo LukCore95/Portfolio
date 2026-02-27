@@ -1,65 +1,50 @@
-/* Vanilla ImageLightbox for Blogger (no jQuery)
-   Targets: .post-body a[href] > img
-   Creates:
-   - #imagelightbox (img)
-   - #imagelightbox-overlay
-   - #imagelightbox-close
-   - .imagelightbox-arrow-left/.imagelightbox-arrow-right
-   - #imagelightbox-nav (buttons)
-   - #imagelightbox-loading
-   - #imagelightbox-caption
-*/
 (function () {
   'use strict';
-   console.log('[Lightbox] script loaded');
 
-  const SELECTOR = '.post-body a[href] img';
+  console.log('[Lightbox] script loaded');
+
+  // Działa na anchor z obrazkiem wewnątrz postów
+  const CLICK_SCOPE_SELECTOR = '.post-body, .post-body-container, .entry-content, .post'; // szerzej niż samo .post-body
+  const ANCHOR_SELECTOR = 'a[href]';
+
+  // Pozwala na .jpg/.jpeg/.png/.gif/.webp + opcjonalny querystring
   const ALLOWED = /\.(png|jpe?g|gif|webp)(\?.*)?$/i;
 
-  const opts = {
-    animationSpeed: 250,
-    preloadNext: true,
-    enableKeyboard: true,
-    quitOnEnd: false,
-    quitOnImgClick: false,
-    quitOnDocClick: true,
-  };
-
-  /** @type {HTMLAnchorElement[]} */
   let links = [];
   let index = -1;
   let isOpen = false;
 
   let overlay, imgEl, closeBtn, captionEl, loadingEl, navEl, arrowL, arrowR;
 
-  function q(id) { return document.getElementById(id); }
   function removeEl(el) { if (el && el.parentNode) el.parentNode.removeChild(el); }
 
-function findLinks() {
-  const anchors = Array.from(document.querySelectorAll('.post-body a[href]'))
-    .filter(a => a.querySelector('img'));
-  return Array.from(new Set(anchors));
-}
+  function findLinks() {
+    // bierzemy wszystkie linki w obrębie postów, które zawierają IMG i href wygląda na obraz
+    const scopes = Array.from(document.querySelectorAll(CLICK_SCOPE_SELECTOR));
+    const anchors = scopes.flatMap(scope => Array.from(scope.querySelectorAll(ANCHOR_SELECTOR)));
+
+    const filtered = anchors
+      .filter(a => a.querySelector('img'))
+      .filter(a => ALLOWED.test(a.getAttribute('href') || ''));
+
+    return Array.from(new Set(filtered));
+  }
 
   function buildUI() {
-    // overlay
     overlay = document.createElement('div');
     overlay.id = 'imagelightbox-overlay';
     document.body.appendChild(overlay);
 
-    // image
     imgEl = document.createElement('img');
     imgEl.id = 'imagelightbox';
     document.body.appendChild(imgEl);
 
-    // close
     closeBtn = document.createElement('button');
     closeBtn.type = 'button';
     closeBtn.id = 'imagelightbox-close';
     closeBtn.title = 'Close';
     document.body.appendChild(closeBtn);
 
-    // arrows
     arrowL = document.createElement('button');
     arrowL.type = 'button';
     arrowL.className = 'imagelightbox-arrow imagelightbox-arrow-left';
@@ -71,7 +56,6 @@ function findLinks() {
     document.body.appendChild(arrowL);
     document.body.appendChild(arrowR);
 
-    // nav
     navEl = document.createElement('div');
     navEl.id = 'imagelightbox-nav';
     for (let i = 0; i < links.length; i++) {
@@ -81,29 +65,19 @@ function findLinks() {
     }
     document.body.appendChild(navEl);
 
-    // events
     closeBtn.addEventListener('click', quit);
-    closeBtn.addEventListener('touchend', (e) => { e.preventDefault(); quit(); }, { passive: false });
-
     arrowL.addEventListener('click', () => step(-1));
     arrowR.addEventListener('click', () => step(1));
 
-    // clicking overlay closes (optional)
-    if (opts.quitOnDocClick) {
-      overlay.addEventListener('click', quit);
-    }
+    overlay.addEventListener('click', quit);
 
-    // clicking image (optional quit / else step by side)
     imgEl.addEventListener('click', (e) => {
       e.preventDefault();
-      if (opts.quitOnImgClick) return quit();
-      // emulate old behavior: click left half = prev, right half = next
       const rect = imgEl.getBoundingClientRect();
       const x = e.clientX - rect.left;
       step(x < rect.width / 2 ? -1 : 1);
     });
 
-    // nav clicks
     navEl.addEventListener('click', (e) => {
       const btn = e.target.closest('button');
       if (!btn) return;
@@ -112,18 +86,13 @@ function findLinks() {
       if (idx >= 0) switchTo(idx);
     });
 
-    // keyboard
-    if (opts.enableKeyboard) {
-      document.addEventListener('keyup', onKeyUp);
-    }
-
-    // resize reposition
+    document.addEventListener('keyup', onKeyUp);
     window.addEventListener('resize', positionImage);
   }
 
   function destroyUI() {
     window.removeEventListener('resize', positionImage);
-    if (opts.enableKeyboard) document.removeEventListener('keyup', onKeyUp);
+    document.removeEventListener('keyup', onKeyUp);
 
     removeEl(overlay);
     removeEl(imgEl);
@@ -177,15 +146,6 @@ function findLinks() {
     buttons.forEach((b, i) => b.classList.toggle('active', i === index));
   }
 
-  function preloadNext() {
-    if (!opts.preloadNext || links.length === 0) return;
-    const nextIndex = (index + 1) % links.length;
-    const href = links[nextIndex].getAttribute('href');
-    if (!href) return;
-    const pre = new Image();
-    pre.src = href;
-  }
-
   function positionImage() {
     if (!imgEl || !imgEl.naturalWidth) return;
 
@@ -213,14 +173,7 @@ function findLinks() {
     if (!isOpen) return;
     if (links.length < 2) return;
 
-    const next = index + delta;
-
-    if (opts.quitOnEnd) {
-      if (next < 0 || next >= links.length) return quit();
-    }
-
-    // wrap
-    let newIndex = next;
+    let newIndex = index + delta;
     if (newIndex < 0) newIndex = links.length - 1;
     if (newIndex >= links.length) newIndex = 0;
 
@@ -230,7 +183,6 @@ function findLinks() {
   function switchTo(newIndex) {
     if (!isOpen) return;
     if (newIndex === index) return;
-
     index = newIndex;
     loadCurrent();
   }
@@ -245,28 +197,23 @@ function findLinks() {
     showLoading();
     removeEl(captionEl);
 
-    // small fade
     imgEl.style.opacity = '0';
 
     const loader = new Image();
     loader.onload = function () {
       imgEl.src = href;
-      // once src set, ensure natural sizes available shortly
       requestAnimationFrame(() => {
         positionImage();
         hideLoading();
         showCaption();
         setNavActive();
-        preloadNext();
-        // arrows visible
         if (arrowL) arrowL.style.display = 'block';
         if (arrowR) arrowR.style.display = 'block';
       });
     };
     loader.onerror = function () {
+      console.warn('[Lightbox] failed to load image', href);
       hideLoading();
-      // keep old image, or quit
-      // Here: quit to avoid stuck state
       quit();
     };
     loader.src = href;
@@ -274,6 +221,8 @@ function findLinks() {
 
   function openAt(i) {
     links = findLinks();
+    console.log('[Lightbox] found links:', links.length);
+
     if (!links.length) return;
 
     index = Math.max(0, Math.min(i, links.length - 1));
@@ -290,28 +239,44 @@ function findLinks() {
     index = -1;
   }
 
-function bindClicks() {
-  document.addEventListener('click', function (e) {
-    const a = e.target.closest('.post-body a[href]');
-    if (!a) return;
+  function bindClicks() {
+    document.addEventListener('click', function (e) {
+      const a = e.target.closest('a[href]');
+      if (!a) return;
 
-    const hasImg = !!a.querySelector('img');
-    if (!hasImg) return;
+      // musi zawierać obrazek
+      if (!a.querySelector('img')) return;
 
-    const href = a.getAttribute('href') || '';
-    console.log('[Lightbox] click candidate href=', href);
+      // musi być wewnątrz postów
+      if (!a.closest(CLICK_SCOPE_SELECTOR)) return;
 
-    e.preventDefault();
+      const href = a.getAttribute('href') || '';
+      if (!ALLOWED.test(href)) return;
 
-    const currentLinks = findLinks(); // to też tymczasowo uprościmy niżej
-    const idx = currentLinks.indexOf(a);
-    console.log('[Lightbox] opening index', idx);
-    openAt(idx >= 0 ? idx : 0);
-  }, true);
-}
+      console.log('[Lightbox] click on', href);
 
-   document.addEventListener('DOMContentLoaded', function () {
-     console.log('[Lightbox] DOMContentLoaded');
-     bindClicks();
-   });
+      e.preventDefault();
+      e.stopPropagation();
+
+      const current = findLinks();
+      const idx = current.indexOf(a);
+      openAt(idx >= 0 ? idx : 0);
+    }, true); // CAPTURE: przechwytuje zanim inne skrypty zablokują
+  }
+
+  function init() {
+    try {
+      console.log('[Lightbox] init');
+      bindClicks();
+    } catch (err) {
+      console.error('[Lightbox] init error', err);
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    console.log('[Lightbox] DOMContentLoaded');
+    init();
+    // dodatkowy “kick” gdyby Blogger coś domontowywał
+    setTimeout(init, 500);
+  });
 })();
