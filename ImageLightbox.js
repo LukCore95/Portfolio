@@ -11,6 +11,7 @@
 */
 (function () {
   'use strict';
+   console.log('[Lightbox] script loaded');
 
   const SELECTOR = '.post-body a[href] img';
   const ALLOWED = /\.(png|jpe?g|gif|webp)(\?.*)?$/i;
@@ -312,7 +313,8 @@
     });
   }
 
-  document.addEventListener('DOMContentLoaded', function () {
-    bindClicks();
-  });
+   document.addEventListener('DOMContentLoaded', function () {
+     console.log('[Lightbox] DOMContentLoaded');
+     bindClicks();
+   });
 })();
