@@ -35,15 +35,11 @@
   function q(id) { return document.getElementById(id); }
   function removeEl(el) { if (el && el.parentNode) el.parentNode.removeChild(el); }
 
-  function findLinks() {
-    const imgs = Array.from(document.querySelectorAll(SELECTOR));
-    const anchors = imgs
-      .map(img => img.closest('a'))
-      .filter(Boolean)
-      .filter(a => ALLOWED.test(a.getAttribute('href') || ''));
-    // de-dup (same node repeated)
-    return Array.from(new Set(anchors));
-  }
+function findLinks() {
+  const anchors = Array.from(document.querySelectorAll('.post-body a[href]'))
+    .filter(a => a.querySelector('img'));
+  return Array.from(new Set(anchors));
+}
 
   function buildUI() {
     // overlay
@@ -294,24 +290,25 @@
     index = -1;
   }
 
-  function bindClicks() {
-    // event delegation: clicking an eligible anchor should open
-    document.addEventListener('click', function (e) {
-      const a = e.target.closest('.post-body a[href]');
-      if (!a) return;
+function bindClicks() {
+  document.addEventListener('click', function (e) {
+    const a = e.target.closest('.post-body a[href]');
+    if (!a) return;
 
-      const href = a.getAttribute('href') || '';
-      const hasImg = !!a.querySelector('img');
-      if (!hasImg) return;
-      if (!ALLOWED.test(href)) return;
+    const hasImg = !!a.querySelector('img');
+    if (!hasImg) return;
 
-      e.preventDefault();
+    const href = a.getAttribute('href') || '';
+    console.log('[Lightbox] click candidate href=', href);
 
-      const currentLinks = findLinks();
-      const idx = currentLinks.indexOf(a);
-      openAt(idx >= 0 ? idx : 0);
-    });
-  }
+    e.preventDefault();
+
+    const currentLinks = findLinks(); // to też tymczasowo uprościmy niżej
+    const idx = currentLinks.indexOf(a);
+    console.log('[Lightbox] opening index', idx);
+    openAt(idx >= 0 ? idx : 0);
+  }, true);
+}
 
    document.addEventListener('DOMContentLoaded', function () {
      console.log('[Lightbox] DOMContentLoaded');
