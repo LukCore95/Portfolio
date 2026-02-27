@@ -13,7 +13,7 @@
   'use strict';
 
   const SELECTOR = '.post-body a[href] img';
-  const ALLOWED = /\.(png|jpe?g|gif)$/i;
+  const ALLOWED = /\.(png|jpe?g|gif|webp)(\?.*)?$/i;
 
   const opts = {
     animationSpeed: 250,
