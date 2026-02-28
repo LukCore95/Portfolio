@@ -301,25 +301,34 @@ function setTranslateX(el, px, seconds) {
 
     var loader = new Image();
     loader.onload = function () {
-      imgEl.src = href;
+  imgEl.src = href;
 
-      setTimeout(function () {
-        positionImage();
+  setTimeout(function () {
+    positionImage();
 
-        imgEl.style.opacity = '1';
-        setTranslateX(imgEl, 0, opts.animationSpeed / 1000);
+    // start wejścia (z boku, niewidoczny)
+    var dir = (direction === 'left') ? 1 : (direction === 'right') ? -1 : 0;
+    setTranslateX(imgEl, -100 * dir, 0);
+    imgEl.style.opacity = '0';
 
-        setTimeout(function () {
-          hideLoading();
-          showCaption();
-          setNavActive();
-          preloadNext();
-          if (arrowL) arrowL.style.display = 'block';
-          if (arrowR) arrowR.style.display = 'block';
-          isAnimating = false;
-        }, opts.animationSpeed);
-      }, 0);
-    };
+    // wejście (do środka + fade in)
+    setTimeout(function () {
+      setTranslateX(imgEl, 0, opts.animationSpeed / 1000);
+      imgEl.style.opacity = '1';
+    }, 20);
+
+    // koniec animacji
+    setTimeout(function () {
+      hideLoading();
+      showCaption();
+      setNavActive();
+      preloadNext();
+      if (arrowL) arrowL.style.display = 'block';
+      if (arrowR) arrowR.style.display = 'block';
+      isAnimating = false;
+    }, opts.animationSpeed);
+  }, 0);
+};
 
     loader.onerror = function () {
       hideLoading();
