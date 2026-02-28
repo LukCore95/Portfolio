@@ -63,25 +63,24 @@
     return Array.from(new Set(anchors));
   }
 
-  function getVendorPrefix() {
-    const style = (document.body || document.documentElement).style;
-    if (style.WebkitTransition === '') return '-webkit-';
-    if (style.MozTransition === '') return '-moz-';
-    if (style.OTransition === '') return '-o-';
-    if (style.transition === '') return '';
-    return '';
-  }
+  function getVendorProp(prop) {
+  // returns the correct style property name supported by this browser
+  var style = (document.body || document.documentElement).style;
+  if (('Webkit' + prop) in style) return 'Webkit' + prop;
+  if (('Moz' + prop) in style) return 'Moz' + prop;
+  if (('O' + prop) in style) return 'O' + prop;
+  if (prop.toLowerCase() in style) return prop.toLowerCase();
+  return prop.toLowerCase();
+}
 
-  const prefix = getVendorPrefix();
-  const canTransform = true; // all modern browsers; keeping for readability
+var transformProp = getVendorProp('Transform');
+var transitionProp = getVendorProp('Transition');
 
-  function setTranslateX(el, px, seconds) {
-    if (!el) return;
-    el.style[`${prefix}transform`] = `translateX(${px}px)`;
-    el.style[`${prefix}transition`] = `${prefix}transform ${seconds}s linear`;
-    el.style.transform = `translateX(${px}px)`;
-    el.style.transition = `transform ${seconds}s linear`;
-  }
+function setTranslateX(el, px, seconds) {
+  if (!el) return;
+  el.style.transform = 'translateX(' + px + 'px)';
+  el.style.transition = 'transform ' + seconds + 's linear';
+}
 
   function viewportBox() {
     return { w: window.innerWidth, h: window.innerHeight };
