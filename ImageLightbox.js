@@ -1,4 +1,3 @@
-```javascript
 /* Vanilla ImageLightbox for Blogger (no jQuery) + swipe + slide animation
    Targets: .post-body a[href] > img
    Creates:
@@ -500,4 +499,3 @@ function positionImage() {
     bindClicks();
   });
 })();
-```
