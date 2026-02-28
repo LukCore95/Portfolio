@@ -1,28 +1,58 @@
-<script type="text/javascript">
+/*!
+ * ImageLightbox Vanilla (ES5) for Blogger - swipe + slide animation
+ * Based on behavior of the jQuery ImageLightbox snippet you used, but with zero jQuery dependency.
+ *
+ * Targets:
+ *   <div class="post-body"> ... <a href="...jpg|png|gif|webp"><img ...></a> ... </div>
+ *
+ * Creates (IDs/classes match your existing CSS):
+ *   #imagelightbox
+ *   #imagelightbox-overlay
+ *   #imagelightbox-close
+ *   .imagelightbox-arrow.imagelightbox-arrow-left
+ *   .imagelightbox-arrow.imagelightbox-arrow-right
+ *   #imagelightbox-nav  (buttons)
+ *   #imagelightbox-loading
+ *   #imagelightbox-caption
+ *
+ * License: MIT (you can adjust)
+ */
 (function () {
   'use strict';
 
+  // -------- Config --------
   var SELECTOR = '.post-body a[href] img';
   var ALLOWED = /\.(png|jpe?g|gif|webp)(\?.*)?$/i;
 
   var opts = {
-    animationSpeed: 250,
+    animationSpeed: 250,     // ms
     preloadNext: true,
     enableKeyboard: true,
     quitOnEnd: false,
     quitOnImgClick: false,
     quitOnDocClick: true,
+
     swipeThresholdPx: 50,
     clickDeadzonePx: 8
   };
 
+  // -------- State --------
   var links = [];
   var index = -1;
   var isOpen = false;
   var isAnimating = false;
 
-  var overlay = null, imgEl = null, closeBtn = null, captionEl = null, loadingEl = null, navEl = null, arrowL = null, arrowR = null;
+  // UI
+  var overlay = null;
+  var imgEl = null;
+  var closeBtn = null;
+  var captionEl = null;
+  var loadingEl = null;
+  var navEl = null;
+  var arrowL = null;
+  var arrowR = null;
 
+  // Drag/swipe
   var pointerDown = false;
   var dragStartX = 0;
   var lastX = 0;
@@ -31,23 +61,32 @@
   var hasPointer = !!window.PointerEvent;
   var supportTouch = ('ontouchstart' in window);
 
-  function removeEl(el) { if (el && el.parentNode) el.parentNode.removeChild(el); }
+  // -------- Helpers --------
+  function removeEl(el) {
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  }
 
-  function findLinks() {
-    var imgs = Array.prototype.slice.call(document.querySelectorAll(SELECTOR));
-    var anchors = [];
-    var seen = [];
-    for (var i = 0; i < imgs.length; i++) {
-      var a = imgs[i].closest ? imgs[i].closest('a') : null;
-      if (!a) continue;
-      var href = a.getAttribute('href') || '';
-      if (!ALLOWED.test(href)) continue;
-      if (seen.indexOf(a) === -1) {
-        seen.push(a);
-        anchors.push(a);
-      }
+  function closest(el, selector) {
+    // Prefer native closest when available; keep fallback simple.
+    if (!el) return null;
+    if (el.closest) return el.closest(selector);
+
+    while (el && el.nodeType === 1) {
+      if (matches(el, selector)) return el;
+      el = el.parentElement;
     }
-    return anchors;
+    return null;
+  }
+
+  function matches(el, selector) {
+    var p = Element.prototype;
+    var fn = p.matches || p.matchesSelector || p.msMatchesSelector || p.webkitMatchesSelector || p.mozMatchesSelector;
+    if (fn) return fn.call(el, selector);
+
+    // Very old fallback (unlikely needed)
+    var nodes = (el.document || el.ownerDocument).querySelectorAll(selector);
+    for (var i = 0; i < nodes.length; i++) if (nodes[i] === el) return true;
+    return false;
   }
 
   function setTranslateX(el, px, seconds) {
@@ -61,6 +100,7 @@
 
     var vw = window.innerWidth;
     var vh = window.innerHeight;
+
     var maxW = vw * 0.8;
     var maxH = vh * 0.9;
 
@@ -98,7 +138,10 @@
 
     var a = links[index];
     var img = a ? a.querySelector('img') : null;
-    var alt = (img && img.getAttribute && img.getAttribute('alt')) ? img.getAttribute('alt') : '';
+
+    var alt = '';
+    if (img && img.getAttribute) alt = img.getAttribute('alt') || '';
+
     var text = (alt && alt.replace(/\s+/g, ' ').trim()) ? alt : 'No Caption';
 
     captionEl = document.createElement('div');
@@ -125,6 +168,27 @@
     pre.src = href;
   }
 
+  function findLinks() {
+    var imgs = Array.prototype.slice.call(document.querySelectorAll(SELECTOR));
+    var anchors = [];
+    var seen = [];
+
+    for (var i = 0; i < imgs.length; i++) {
+      var a = closest(imgs[i], 'a');
+      if (!a) continue;
+
+      var href = a.getAttribute('href') || '';
+      if (!ALLOWED.test(href)) continue;
+
+      if (seen.indexOf(a) === -1) {
+        seen.push(a);
+        anchors.push(a);
+      }
+    }
+    return anchors;
+  }
+
+  // -------- Keyboard --------
   function onKeyUp(e) {
     if (!isOpen) return;
     if (e.keyCode === 27) quit();
@@ -132,6 +196,7 @@
     else if (e.keyCode === 39) step(1);
   }
 
+  // -------- UI lifecycle --------
   function buildUI() {
     overlay = document.createElement('div');
     overlay.id = 'imagelightbox-overlay';
@@ -169,13 +234,10 @@
     document.body.appendChild(navEl);
 
     closeBtn.onclick = function () { quit(); };
-
     arrowL.onclick = function () { step(-1); };
     arrowR.onclick = function () { step(1); };
 
-    if (opts.quitOnDocClick) {
-      overlay.onclick = function () { quit(); };
-    }
+    if (opts.quitOnDocClick) overlay.onclick = function () { quit(); };
 
     imgEl.onclick = function (e) {
       // suppress click if it was a drag
@@ -192,6 +254,7 @@
     navEl.onclick = function (e) {
       var target = e.target;
       if (!target || target.tagName !== 'BUTTON') return;
+
       var buttons = navEl.querySelectorAll('button');
       var idx = -1;
       for (var i = 0; i < buttons.length; i++) {
@@ -209,13 +272,19 @@
     if (opts.enableKeyboard) document.removeEventListener('keyup', onKeyUp);
     unbindDragEvents();
 
-    removeEl(overlay); removeEl(imgEl); removeEl(closeBtn);
-    removeEl(arrowL); removeEl(arrowR); removeEl(navEl);
-    removeEl(captionEl); removeEl(loadingEl);
+    removeEl(overlay);
+    removeEl(imgEl);
+    removeEl(closeBtn);
+    removeEl(arrowL);
+    removeEl(arrowR);
+    removeEl(navEl);
+    removeEl(captionEl);
+    removeEl(loadingEl);
 
     overlay = imgEl = closeBtn = captionEl = loadingEl = navEl = arrowL = arrowR = null;
   }
 
+  // -------- Load / animate --------
   function loadCurrent(direction) {
     var a = links[index];
     if (!a || !imgEl) return;
@@ -236,6 +305,7 @@
 
       setTimeout(function () {
         positionImage();
+
         imgEl.style.opacity = '1';
         setTranslateX(imgEl, 0, opts.animationSpeed / 1000);
 
@@ -250,15 +320,26 @@
         }, opts.animationSpeed);
       }, 0);
     };
-    loader.onerror = function () { hideLoading(); quit(); };
+
+    loader.onerror = function () {
+      hideLoading();
+      quit();
+    };
+
     loader.src = href;
   }
 
   function animateOutThenLoad(nextIndex, direction) {
+    if (!imgEl) return;
+
     var dir = (direction === 'left') ? 1 : -1;
     setTranslateX(imgEl, 100 * dir, opts.animationSpeed / 1000);
     imgEl.style.opacity = '0';
-    setTimeout(function () { index = nextIndex; loadCurrent(direction); }, opts.animationSpeed);
+
+    setTimeout(function () {
+      index = nextIndex;
+      loadCurrent(direction);
+    }, opts.animationSpeed);
   }
 
   function step(delta) {
@@ -266,7 +347,6 @@
     if (links.length < 2) return;
 
     var next = index + delta;
-
     if (opts.quitOnEnd && (next < 0 || next >= links.length)) return quit();
 
     var newIndex = next;
@@ -282,6 +362,7 @@
     animateOutThenLoad(newIndex, direction || (newIndex < index ? 'left' : 'right'));
   }
 
+  // -------- Open / close --------
   function openAt(i) {
     links = findLinks();
     if (!links.length) return;
@@ -301,6 +382,7 @@
     isAnimating = false;
   }
 
+  // -------- Swipe / drag --------
   function getPageXFromEvent(e) {
     if (e.touches && e.touches[0]) return e.touches[0].pageX;
     if (e.changedTouches && e.changedTouches[0]) return e.changedTouches[0].pageX;
@@ -315,6 +397,7 @@
     dragStartX = getPageXFromEvent(e);
     lastX = dragStartX;
     dragDx = 0;
+
     setTranslateX(imgEl, 0, 0);
   }
 
@@ -325,6 +408,7 @@
 
     lastX = getPageXFromEvent(e);
     dragDx = dragStartX - lastX;
+
     setTranslateX(imgEl, -dragDx, 0);
   }
 
@@ -387,9 +471,11 @@
     }
   }
 
+  // -------- Click binding --------
   function bindClicks() {
     document.addEventListener('click', function (e) {
-      var a = e.target && e.target.closest ? e.target.closest('.post-body a[href]') : null;
+      var target = e.target;
+      var a = closest(target, '.post-body a[href]');
       if (!a) return;
 
       var href = a.getAttribute('href') || '';
@@ -398,6 +484,7 @@
 
       e.preventDefault();
 
+      // Use current set (in case page content changed)
       var current = findLinks();
       var idx = current.indexOf(a);
       openAt(idx >= 0 ? idx : 0);
@@ -406,4 +493,3 @@
 
   document.addEventListener('DOMContentLoaded', bindClicks);
 })();
-</script>
