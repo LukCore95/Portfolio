@@ -86,28 +86,29 @@ function setTranslateX(el, px, seconds) {
     return { w: window.innerWidth, h: window.innerHeight };
   }
 
-  function positionImage() {
-    if (!imgEl || !imgEl.naturalWidth) return;
+function positionImage() {
+  if (!imgEl || !imgEl.naturalWidth) return;
 
-    const { w: vw, h: vh } = viewportBox();
-    const maxW = vw * 0.8;
-    const maxH = vh * 0.9;
+  var vw = window.innerWidth;
+  var vh = window.innerHeight;
+  var maxW = vw * 0.8;
+  var maxH = vh * 0.9;
 
-    let w = imgEl.naturalWidth;
-    let h = imgEl.naturalHeight;
+  var w = imgEl.naturalWidth;
+  var h = imgEl.naturalHeight;
 
-    if (w > maxW || h > maxH) {
-      const scale = (w / h > maxW / maxH) ? (w / maxW) : (h / maxH);
-      w /= scale;
-      h /= scale;
-    }
-
-    imgEl.style.width = `${w}px`;
-    imgEl.style.height = `${h}px`;
-    imgEl.style.position = 'fixed';
-    imgEl.style.left = `${(vw - w) / 2}px`;
-    imgEl.style.top = `${(vh - h) / 2}px`;
+  if (w > maxW || h > maxH) {
+    var scale = (w / h > maxW / maxH) ? (w / maxW) : (h / maxH);
+    w = w / scale;
+    h = h / scale;
   }
+
+  imgEl.style.width = w + 'px';
+  imgEl.style.height = h + 'px';
+  imgEl.style.position = 'fixed';
+  imgEl.style.left = ((vw - w) / 2) + 'px';
+  imgEl.style.top = ((vh - h) / 2) + 'px';
+}
 
   function showLoading() {
     removeEl(loadingEl);
