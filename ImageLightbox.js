@@ -89,11 +89,11 @@
     return false;
   }
 
-  function setTranslateX(el, px, seconds) {
-    if (!el) return;
-    el.style.transform = 'translateX(' + px + 'px)';
-    el.style.transition = 'transform ' + seconds + 's linear';
-  }
+function setTranslateX(el, px, seconds) {
+  if (!el) return;
+  el.style.transform = 'translateX(' + px + 'px)';
+  el.style.transition = 'transform ' + seconds + 's linear, opacity ' + seconds + 's linear';
+}
 
   function positionImage() {
     if (!imgEl || !imgEl.naturalWidth) return;
@@ -329,18 +329,26 @@
     loader.src = href;
   }
 
-  function animateOutThenLoad(nextIndex, direction) {
-    if (!imgEl) return;
+function animateOutThenLoad(nextIndex, direction) {
+  if (!imgEl) return;
 
-    var dir = (direction === 'left') ? 1 : -1;
-    setTranslateX(imgEl, 100 * dir, opts.animationSpeed / 1000);
+  // oryginał: ~100px w bok
+  var dir = (direction === 'left') ? 1 : -1;
+
+  // wyjazd + fade out
+  setTranslateX(imgEl, 100 * dir, opts.animationSpeed / 1000);
+  imgEl.style.opacity = '0';
+
+  setTimeout(function () {
+    index = nextIndex;
+
+    // ustaw start nowego (po przeciwnej stronie) jak w oryginale
+    setTranslateX(imgEl, -100 * dir, 0);
     imgEl.style.opacity = '0';
 
-    setTimeout(function () {
-      index = nextIndex;
-      loadCurrent(direction);
-    }, opts.animationSpeed);
-  }
+    loadCurrent(direction);
+  }, opts.animationSpeed);
+}
 
   function step(delta) {
     if (!isOpen || isAnimating) return;
