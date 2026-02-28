@@ -1,13 +1,10 @@
+<script type="text/javascript">
 (function () {
   'use strict';
 
-  console.log('[Lightbox] script loaded');
+  console.log('[Lightbox] init script start');
 
-  // Działa na anchor z obrazkiem wewnątrz postów
-  const CLICK_SCOPE_SELECTOR = '.post-body, .post-body-container, .entry-content, .post'; // szerzej niż samo .post-body
-  const ANCHOR_SELECTOR = 'a[href]';
-
-  // Pozwala na .jpg/.jpeg/.png/.gif/.webp + opcjonalny querystring
+  const CLICK_SCOPE_SELECTOR = '.post-body, .post';
   const ALLOWED = /\.(png|jpe?g|gif|webp)(\?.*)?$/i;
 
   let links = [];
@@ -19,9 +16,8 @@
   function removeEl(el) { if (el && el.parentNode) el.parentNode.removeChild(el); }
 
   function findLinks() {
-    // bierzemy wszystkie linki w obrębie postów, które zawierają IMG i href wygląda na obraz
     const scopes = Array.from(document.querySelectorAll(CLICK_SCOPE_SELECTOR));
-    const anchors = scopes.flatMap(scope => Array.from(scope.querySelectorAll(ANCHOR_SELECTOR)));
+    const anchors = scopes.flatMap(scope => Array.from(scope.querySelectorAll('a[href]')));
 
     const filtered = anchors
       .filter(a => a.querySelector('img'))
@@ -212,7 +208,6 @@
       });
     };
     loader.onerror = function () {
-      console.warn('[Lightbox] failed to load image', href);
       hideLoading();
       quit();
     };
@@ -221,8 +216,7 @@
 
   function openAt(i) {
     links = findLinks();
-    console.log('[Lightbox] found links:', links.length);
-
+    console.log('[Lightbox] links found:', links.length);
     if (!links.length) return;
 
     index = Math.max(0, Math.min(i, links.length - 1));
@@ -239,44 +233,26 @@
     index = -1;
   }
 
-  function bindClicks() {
-    document.addEventListener('click', function (e) {
-      const a = e.target.closest('a[href]');
-      if (!a) return;
+  // CAPTURE: przechwytuje klik zanim inne skrypty go zablokują
+  document.addEventListener('click', function (e) {
+    const a = e.target.closest('a[href]');
+    if (!a) return;
+    if (!a.querySelector('img')) return;
+    if (!a.closest(CLICK_SCOPE_SELECTOR)) return;
 
-      // musi zawierać obrazek
-      if (!a.querySelector('img')) return;
+    const href = a.getAttribute('href') || '';
+    if (!ALLOWED.test(href)) return;
 
-      // musi być wewnątrz postów
-      if (!a.closest(CLICK_SCOPE_SELECTOR)) return;
+    console.log('[Lightbox] click:', href);
 
-      const href = a.getAttribute('href') || '';
-      if (!ALLOWED.test(href)) return;
+    e.preventDefault();
+    e.stopPropagation();
 
-      console.log('[Lightbox] click on', href);
+    const current = findLinks();
+    const idx = current.indexOf(a);
+    openAt(idx >= 0 ? idx : 0);
+  }, true);
 
-      e.preventDefault();
-      e.stopPropagation();
-
-      const current = findLinks();
-      const idx = current.indexOf(a);
-      openAt(idx >= 0 ? idx : 0);
-    }, true); // CAPTURE: przechwytuje zanim inne skrypty zablokują
-  }
-
-  function init() {
-    try {
-      console.log('[Lightbox] init');
-      bindClicks();
-    } catch (err) {
-      console.error('[Lightbox] init error', err);
-    }
-  }
-
-  document.addEventListener('DOMContentLoaded', function () {
-    console.log('[Lightbox] DOMContentLoaded');
-    init();
-    // dodatkowy “kick” gdyby Blogger coś domontowywał
-    setTimeout(init, 500);
-  });
+  console.log('[Lightbox] handler attached');
 })();
+</script>
