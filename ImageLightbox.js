@@ -1,112 +1,113 @@
-<script type="text/javascript">
+```javascript
+/* Vanilla ImageLightbox for Blogger (no jQuery) + swipe + slide animation
+   Targets: .post-body a[href] > img
+   Creates:
+   - #imagelightbox (img)
+   - #imagelightbox-overlay
+   - #imagelightbox-close
+   - .imagelightbox-arrow-left/.imagelightbox-arrow-right
+   - #imagelightbox-nav (buttons)
+   - #imagelightbox-loading
+   - #imagelightbox-caption
+*/
 (function () {
   'use strict';
 
-  console.log('[Lightbox] init script start');
+  const SELECTOR = '.post-body a[href] img';
 
-  const CLICK_SCOPE_SELECTOR = '.post-body, .post';
-  const ALLOWED = /\.(png|jpe?g|gif|webp)(\?.*)?$/i;
+  // If your image URLs sometimes include querystrings, consider:
+  // const ALLOWED = /\.(png|jpe?g|gif|webp)(\?.*)?$/i;
+  const ALLOWED = /\.(png|jpe?g|gif|webp)$/i;
 
+  const opts = {
+    animationSpeed: 250,   // ms
+    preloadNext: true,
+    enableKeyboard: true,
+    quitOnEnd: false,
+    quitOnImgClick: false,
+    quitOnDocClick: true,
+
+    // swipe/drag tuning
+    swipeThresholdPx: 50,  // minimum drag distance to trigger navigation
+    clickDeadzonePx: 8,    // treat tiny drags as taps
+  };
+
+  /** @type {HTMLAnchorElement[]} */
   let links = [];
   let index = -1;
   let isOpen = false;
+  let isAnimating = false;
 
+  // UI
   let overlay, imgEl, closeBtn, captionEl, loadingEl, navEl, arrowL, arrowR;
+
+  // Drag/swipe state
+  let pointerDown = false;
+  let dragStartX = 0;
+  let lastX = 0;
+  let baseLeftPx = 0;   // left position at drag start (in px)
+  let dragDx = 0;       // startX - currentX
+
+  // Feature detection
+  const hasPointer = 'PointerEvent' in window;
+  const supportTouch = 'ontouchstart' in window;
 
   function removeEl(el) { if (el && el.parentNode) el.parentNode.removeChild(el); }
 
   function findLinks() {
-    const scopes = Array.from(document.querySelectorAll(CLICK_SCOPE_SELECTOR));
-    const anchors = scopes.flatMap(scope => Array.from(scope.querySelectorAll('a[href]')));
-
-    const filtered = anchors
-      .filter(a => a.querySelector('img'))
+    const imgs = Array.from(document.querySelectorAll(SELECTOR));
+    const anchors = imgs
+      .map(img => img.closest('a'))
+      .filter(Boolean)
       .filter(a => ALLOWED.test(a.getAttribute('href') || ''));
-
-    return Array.from(new Set(filtered));
+    return Array.from(new Set(anchors));
   }
 
-  function buildUI() {
-    overlay = document.createElement('div');
-    overlay.id = 'imagelightbox-overlay';
-    document.body.appendChild(overlay);
+  function getVendorPrefix() {
+    const style = (document.body || document.documentElement).style;
+    if (style.WebkitTransition === '') return '-webkit-';
+    if (style.MozTransition === '') return '-moz-';
+    if (style.OTransition === '') return '-o-';
+    if (style.transition === '') return '';
+    return '';
+  }
 
-    imgEl = document.createElement('img');
-    imgEl.id = 'imagelightbox';
-    document.body.appendChild(imgEl);
+  const prefix = getVendorPrefix();
+  const canTransform = true; // all modern browsers; keeping for readability
 
-    closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.id = 'imagelightbox-close';
-    closeBtn.title = 'Close';
-    document.body.appendChild(closeBtn);
+  function setTranslateX(el, px, seconds) {
+    if (!el) return;
+    el.style[`${prefix}transform`] = `translateX(${px}px)`;
+    el.style[`${prefix}transition`] = `${prefix}transform ${seconds}s linear`;
+    el.style.transform = `translateX(${px}px)`;
+    el.style.transition = `transform ${seconds}s linear`;
+  }
 
-    arrowL = document.createElement('button');
-    arrowL.type = 'button';
-    arrowL.className = 'imagelightbox-arrow imagelightbox-arrow-left';
+  function viewportBox() {
+    return { w: window.innerWidth, h: window.innerHeight };
+  }
 
-    arrowR = document.createElement('button');
-    arrowR.type = 'button';
-    arrowR.className = 'imagelightbox-arrow imagelightbox-arrow-right';
+  function positionImage() {
+    if (!imgEl || !imgEl.naturalWidth) return;
 
-    document.body.appendChild(arrowL);
-    document.body.appendChild(arrowR);
+    const { w: vw, h: vh } = viewportBox();
+    const maxW = vw * 0.8;
+    const maxH = vh * 0.9;
 
-    navEl = document.createElement('div');
-    navEl.id = 'imagelightbox-nav';
-    for (let i = 0; i < links.length; i++) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      navEl.appendChild(b);
+    let w = imgEl.naturalWidth;
+    let h = imgEl.naturalHeight;
+
+    if (w > maxW || h > maxH) {
+      const scale = (w / h > maxW / maxH) ? (w / maxW) : (h / maxH);
+      w /= scale;
+      h /= scale;
     }
-    document.body.appendChild(navEl);
 
-    closeBtn.addEventListener('click', quit);
-    arrowL.addEventListener('click', () => step(-1));
-    arrowR.addEventListener('click', () => step(1));
-
-    overlay.addEventListener('click', quit);
-
-    imgEl.addEventListener('click', (e) => {
-      e.preventDefault();
-      const rect = imgEl.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      step(x < rect.width / 2 ? -1 : 1);
-    });
-
-    navEl.addEventListener('click', (e) => {
-      const btn = e.target.closest('button');
-      if (!btn) return;
-      const buttons = Array.from(navEl.querySelectorAll('button'));
-      const idx = buttons.indexOf(btn);
-      if (idx >= 0) switchTo(idx);
-    });
-
-    document.addEventListener('keyup', onKeyUp);
-    window.addEventListener('resize', positionImage);
-  }
-
-  function destroyUI() {
-    window.removeEventListener('resize', positionImage);
-    document.removeEventListener('keyup', onKeyUp);
-
-    removeEl(overlay);
-    removeEl(imgEl);
-    removeEl(closeBtn);
-    removeEl(arrowL);
-    removeEl(arrowR);
-    removeEl(navEl);
-    removeEl(captionEl);
-    removeEl(loadingEl);
-
-    overlay = imgEl = closeBtn = captionEl = loadingEl = navEl = arrowL = arrowR = null;
-  }
-
-  function onKeyUp(e) {
-    if (!isOpen) return;
-    if (e.key === 'Escape') quit();
-    else if (e.key === 'ArrowLeft') step(-1);
-    else if (e.key === 'ArrowRight') step(1);
+    imgEl.style.width = `${w}px`;
+    imgEl.style.height = `${h}px`;
+    imgEl.style.position = 'fixed';
+    imgEl.style.left = `${(vw - w) / 2}px`;
+    imgEl.style.top = `${(vh - h) / 2}px`;
   }
 
   function showLoading() {
@@ -142,69 +143,159 @@
     buttons.forEach((b, i) => b.classList.toggle('active', i === index));
   }
 
-  function positionImage() {
-    if (!imgEl || !imgEl.naturalWidth) return;
+  function preloadNext() {
+    if (!opts.preloadNext || links.length === 0) return;
+    const nextIndex = (index + 1) % links.length;
+    const href = links[nextIndex].getAttribute('href');
+    if (!href) return;
+    const pre = new Image();
+    pre.src = href;
+  }
 
-    const maxW = window.innerWidth * 0.8;
-    const maxH = window.innerHeight * 0.9;
+  function buildUI() {
+    overlay = document.createElement('div');
+    overlay.id = 'imagelightbox-overlay';
+    document.body.appendChild(overlay);
 
-    let w = imgEl.naturalWidth;
-    let h = imgEl.naturalHeight;
+    imgEl = document.createElement('img');
+    imgEl.id = 'imagelightbox';
+    // start invisible; we'll animate in on load
+    imgEl.style.opacity = '0';
+    document.body.appendChild(imgEl);
 
-    if (w > maxW || h > maxH) {
-      const scale = (w / h > maxW / maxH) ? (w / maxW) : (h / maxH);
-      w = w / scale;
-      h = h / scale;
+    closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.id = 'imagelightbox-close';
+    closeBtn.title = 'Close';
+    document.body.appendChild(closeBtn);
+
+    arrowL = document.createElement('button');
+    arrowL.type = 'button';
+    arrowL.className = 'imagelightbox-arrow imagelightbox-arrow-left';
+
+    arrowR = document.createElement('button');
+    arrowR.type = 'button';
+    arrowR.className = 'imagelightbox-arrow imagelightbox-arrow-right';
+
+    document.body.appendChild(arrowL);
+    document.body.appendChild(arrowR);
+
+    navEl = document.createElement('div');
+    navEl.id = 'imagelightbox-nav';
+    for (let i = 0; i < links.length; i++) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      navEl.appendChild(b);
+    }
+    document.body.appendChild(navEl);
+
+    closeBtn.addEventListener('click', quit);
+    closeBtn.addEventListener('touchend', (e) => { e.preventDefault(); quit(); }, { passive: false });
+
+    arrowL.addEventListener('click', () => step(-1));
+    arrowR.addEventListener('click', () => step(1));
+
+    if (opts.quitOnDocClick) {
+      overlay.addEventListener('click', quit);
     }
 
-    imgEl.style.width = `${w}px`;
-    imgEl.style.height = `${h}px`;
-    imgEl.style.position = 'fixed';
-    imgEl.style.left = `${(window.innerWidth - w) / 2}px`;
-    imgEl.style.top = `${(window.innerHeight - h) / 2}px`;
-    imgEl.style.opacity = '1';
+    // Tap image: previous/next by half, unless quitOnImgClick
+    imgEl.addEventListener('click', (e) => {
+      // If the user dragged, we suppress click (handled in pointerup)
+      if (Math.abs(lastX - dragStartX) > opts.clickDeadzonePx) return;
+
+      e.preventDefault();
+      if (opts.quitOnImgClick) return quit();
+
+      const rect = imgEl.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      step(x < rect.width / 2 ? -1 : 1);
+    });
+
+    // swipe/drag events
+    bindDragEvents();
+
+    navEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      const buttons = Array.from(navEl.querySelectorAll('button'));
+      const idx = buttons.indexOf(btn);
+      if (idx >= 0) switchTo(idx, idx < index ? 'left' : 'right');
+    });
+
+    if (opts.enableKeyboard) {
+      document.addEventListener('keyup', onKeyUp);
+    }
+
+    window.addEventListener('resize', positionImage);
   }
 
-  function step(delta) {
+  function destroyUI() {
+    window.removeEventListener('resize', positionImage);
+    if (opts.enableKeyboard) document.removeEventListener('keyup', onKeyUp);
+
+    unbindDragEvents();
+
+    removeEl(overlay);
+    removeEl(imgEl);
+    removeEl(closeBtn);
+    removeEl(arrowL);
+    removeEl(arrowR);
+    removeEl(navEl);
+    removeEl(captionEl);
+    removeEl(loadingEl);
+
+    overlay = imgEl = closeBtn = captionEl = loadingEl = navEl = arrowL = arrowR = null;
+  }
+
+  function onKeyUp(e) {
     if (!isOpen) return;
-    if (links.length < 2) return;
-
-    let newIndex = index + delta;
-    if (newIndex < 0) newIndex = links.length - 1;
-    if (newIndex >= links.length) newIndex = 0;
-
-    switchTo(newIndex);
+    if (e.key === 'Escape') quit();
+    else if (e.key === 'ArrowLeft') step(-1);
+    else if (e.key === 'ArrowRight') step(1);
   }
 
-  function switchTo(newIndex) {
-    if (!isOpen) return;
-    if (newIndex === index) return;
-    index = newIndex;
-    loadCurrent();
-  }
-
-  function loadCurrent() {
+  function loadCurrent(direction /* 'left' | 'right' | null */) {
     const a = links[index];
-    if (!a) return;
+    if (!a || !imgEl) return;
 
     const href = a.getAttribute('href');
     if (!href) return;
 
+    isAnimating = true;
     showLoading();
     removeEl(captionEl);
 
-    imgEl.style.opacity = '0';
+    // prepare for slide-in
+    const dir = direction === 'left' ? 1 : direction === 'right' ? -1 : 0;
+    if (canTransform) {
+      setTranslateX(imgEl, -100 * dir, 0); // start slightly offset
+    }
 
     const loader = new Image();
     loader.onload = function () {
       imgEl.src = href;
+
       requestAnimationFrame(() => {
         positionImage();
-        hideLoading();
-        showCaption();
-        setNavActive();
-        if (arrowL) arrowL.style.display = 'block';
-        if (arrowR) arrowR.style.display = 'block';
+
+        // fade + slide to center
+        imgEl.style.opacity = '1';
+        if (canTransform) {
+          // animate from offset to 0
+          setTranslateX(imgEl, 0, opts.animationSpeed / 1000);
+        }
+
+        // finish
+        setTimeout(() => {
+          hideLoading();
+          showCaption();
+          setNavActive();
+          preloadNext();
+          if (arrowL) arrowL.style.display = 'block';
+          if (arrowR) arrowR.style.display = 'block';
+          isAnimating = false;
+        }, opts.animationSpeed);
       });
     };
     loader.onerror = function () {
@@ -214,16 +305,57 @@
     loader.src = href;
   }
 
+  function animateOutThenLoad(nextIndex, direction /* 'left' | 'right' */) {
+    if (!imgEl) return;
+
+    const dir = direction === 'left' ? 1 : -1;
+
+    // animate out
+    if (canTransform) {
+      setTranslateX(imgEl, 100 * dir, opts.animationSpeed / 1000);
+    }
+    imgEl.style.opacity = '0';
+
+    setTimeout(() => {
+      index = nextIndex;
+      loadCurrent(direction);
+    }, opts.animationSpeed);
+  }
+
+  function step(delta) {
+    if (!isOpen || isAnimating) return;
+    if (links.length < 2) return;
+
+    const next = index + delta;
+
+    if (opts.quitOnEnd && (next < 0 || next >= links.length)) {
+      return quit();
+    }
+
+    let newIndex = next;
+    if (newIndex < 0) newIndex = links.length - 1;
+    if (newIndex >= links.length) newIndex = 0;
+
+    const direction = delta < 0 ? 'left' : 'right';
+    animateOutThenLoad(newIndex, direction);
+  }
+
+  function switchTo(newIndex, direction) {
+    if (!isOpen || isAnimating) return;
+    if (newIndex === index) return;
+
+    animateOutThenLoad(newIndex, direction || (newIndex < index ? 'left' : 'right'));
+  }
+
   function openAt(i) {
     links = findLinks();
-    console.log('[Lightbox] links found:', links.length);
     if (!links.length) return;
 
     index = Math.max(0, Math.min(i, links.length - 1));
     isOpen = true;
 
     buildUI();
-    loadCurrent();
+    loadCurrent(null);
   }
 
   function quit() {
@@ -231,28 +363,141 @@
     isOpen = false;
     destroyUI();
     index = -1;
+    isAnimating = false;
   }
 
-  // CAPTURE: przechwytuje klik zanim inne skrypty go zablokują
-  document.addEventListener('click', function (e) {
-    const a = e.target.closest('a[href]');
-    if (!a) return;
-    if (!a.querySelector('img')) return;
-    if (!a.closest(CLICK_SCOPE_SELECTOR)) return;
+  // ---------- Swipe / Drag ----------
+  function isPrimaryPointer(e) {
+    // mouse (button 0) or touch/pen primary
+    if (e.pointerType) return e.isPrimary !== false;
+    return true;
+  }
 
-    const href = a.getAttribute('href') || '';
-    if (!ALLOWED.test(href)) return;
+  function getPageXFromEvent(e) {
+    if (e.touches && e.touches[0]) return e.touches[0].pageX;
+    if (e.changedTouches && e.changedTouches[0]) return e.changedTouches[0].pageX;
+    return e.pageX;
+  }
 
-    console.log('[Lightbox] click:', href);
+  function onDown(e) {
+    if (!isOpen || !imgEl || isAnimating) return;
+    if (hasPointer && e.pointerType === 'mouse' && e.button !== 0) return;
+    if (hasPointer && !isPrimaryPointer(e)) return;
 
-    e.preventDefault();
-    e.stopPropagation();
+    pointerDown = true;
+    dragStartX = getPageXFromEvent(e);
+    lastX = dragStartX;
+    dragDx = 0;
 
-    const current = findLinks();
-    const idx = current.indexOf(a);
-    openAt(idx >= 0 ? idx : 0);
-  }, true);
+    // base left for non-transform fallback; here we use transform, but keep state anyway
+    const left = parseFloat(imgEl.style.left || '0');
+    baseLeftPx = isFinite(left) ? left : 0;
 
-  console.log('[Lightbox] handler attached');
+    // cancel transitions while dragging
+    if (canTransform) setTranslateX(imgEl, 0, 0);
+  }
+
+  function onMove(e) {
+    if (!pointerDown || !isOpen || !imgEl || isAnimating) return;
+
+    // prevent page scroll while swiping on image
+    if (supportTouch) e.preventDefault();
+
+    lastX = getPageXFromEvent(e);
+    dragDx = dragStartX - lastX; // same sign as old plugin: start - current
+
+    // follow finger: move image opposite direction so it "drags"
+    if (canTransform) {
+      setTranslateX(imgEl, -dragDx, 0);
+    }
+  }
+
+  function onUp(e) {
+    if (!pointerDown || !isOpen || !imgEl || isAnimating) return;
+    pointerDown = false;
+
+    const abs = Math.abs(dragDx);
+
+    if (abs > opts.swipeThresholdPx) {
+      // old logic: dragDx > 0 => moved finger left => go RIGHT (next)
+      step(dragDx > 0 ? 1 : -1);
+      dragDx = 0;
+      return;
+    }
+
+    // snap back
+    if (canTransform) {
+      setTranslateX(imgEl, 0, opts.animationSpeed / 1000);
+    }
+    dragDx = 0;
+  }
+
+  let bound = false;
+  function bindDragEvents() {
+    if (!imgEl || bound) return;
+    bound = true;
+
+    if (hasPointer) {
+      imgEl.addEventListener('pointerdown', onDown);
+      imgEl.addEventListener('pointermove', onMove, { passive: false });
+      imgEl.addEventListener('pointerup', onUp);
+      imgEl.addEventListener('pointercancel', onUp);
+    } else {
+      // Touch fallback
+      imgEl.addEventListener('touchstart', onDown, { passive: true });
+      imgEl.addEventListener('touchmove', onMove, { passive: false });
+      imgEl.addEventListener('touchend', onUp);
+      imgEl.addEventListener('touchcancel', onUp);
+
+      // Mouse fallback
+      imgEl.addEventListener('mousedown', onDown);
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    }
+  }
+
+  function unbindDragEvents() {
+    if (!imgEl || !bound) return;
+    bound = false;
+
+    if (hasPointer) {
+      imgEl.removeEventListener('pointerdown', onDown);
+      imgEl.removeEventListener('pointermove', onMove);
+      imgEl.removeEventListener('pointerup', onUp);
+      imgEl.removeEventListener('pointercancel', onUp);
+    } else {
+      imgEl.removeEventListener('touchstart', onDown);
+      imgEl.removeEventListener('touchmove', onMove);
+      imgEl.removeEventListener('touchend', onUp);
+      imgEl.removeEventListener('touchcancel', onUp);
+
+      imgEl.removeEventListener('mousedown', onDown);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    }
+  }
+  // ---------------------------------
+
+  function bindClicks() {
+    document.addEventListener('click', function (e) {
+      const a = e.target.closest('.post-body a[href]');
+      if (!a) return;
+
+      const href = a.getAttribute('href') || '';
+      const hasImg = !!a.querySelector('img');
+      if (!hasImg) return;
+      if (!ALLOWED.test(href)) return;
+
+      e.preventDefault();
+
+      const currentLinks = findLinks();
+      const idx = currentLinks.indexOf(a);
+      openAt(idx >= 0 ? idx : 0);
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    bindClicks();
+  });
 })();
-</script>
+```
